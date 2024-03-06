@@ -7,7 +7,7 @@ use Illuminate\Support\ServiceProvider;
 class AppServiceProvider extends ServiceProvider
 {
     private $providers = [
-        App\Modules\Game\Providers\ModuleProvider::class,
+        \App\Modules\Game\Providers\ModuleProvider::class,
     ];
     
     /**
