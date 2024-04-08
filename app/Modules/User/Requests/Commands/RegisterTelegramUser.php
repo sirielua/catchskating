@@ -2,10 +2,15 @@
 
 namespace App\Modules\User\Requests\Commands;
 
-readonly class RegisterTelegramUser
+use App\MessageBus\CommandInterface;
+
+readonly class RegisterTelegramUser implements CommandInterface
 {
     public function __construct(
-        public int $telegramId,
-        public string $name,
+        public int $id,
+        public string $username,
+        public ?string $firstName = null,
+        public ?string $lastName = null,
+        public ?string $name = null,
     ) {}
 }

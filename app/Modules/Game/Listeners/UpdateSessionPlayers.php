@@ -4,6 +4,7 @@ namespace App\Modules\Game\Listeners;
 
 use App\Modules\Game\Events\GameCompleted;
 use App\Modules\Game\Models;
+use Illuminate\Support\Collection;
 
 class UpdateSessionPlayers
 {
@@ -20,38 +21,48 @@ class UpdateSessionPlayers
     
     private function updatePlayers(Models\Game $game, Models\Session $session): void
     {
-        $sessionPlayers = $this->getRealSessionPlayers($game, $session);
-        foreach ($sessionPlayers as $sessionPlayer) {
-            $this->updatePlayerData($sessionPlayer, $game);
+        $players = $this->getRealPlayers($game, $session);
+        foreach ($players as $player) {
+            $this->updatePlayerData($player, $game);
         }
         
-        $sessionPlayersData = array_map(function (Models\SessionPlayer $player) {
+        $data = $players->map(function (Models\SessionPlayer $player) {
             return [
                 'session_id' => $player->session_id,
                 'player_id' => $player->player_id,
+                'name' => $player->name,
                 'condition' => $player->condition,
+                'catching_streak' => $player->catching_streak,
                 'running_streak' => $player->running_streak,
+                'resting_streak' => $player->resting_streak,
             ];
-        }, $sessionPlayers);
+        })->all();
         
-        SessionPlayer::upsert($sessionPlayersData, ['session_id', 'player_id']);
+        Models\SessionPlayer::upsert(
+            $data,
+            ['session_id', 'player_id'],
+            ['condition', 'catching_streak', 'running_streak', 'resting_streak'],
+        );
     }
     
-    private function getRealSessionPlayers(Models\Game $game, Models\Session $session): array
+    private function getRealPlayers(Models\Game $game, Models\Session $session): Collection
     {
-        $sessionPlayers = $session->players()->all();
-        $sessionPlayerIds = $session->players->map(function (Models\SessionPlayer $player) {
+        $players = $session->players;
+        
+        $sessionPlayerIds = $players->map(function (Models\SessionPlayer $player) {
             return $player->player_id;
         })->all();
         
         foreach ($game->players as $gamePlayer) {
             if (!in_array($gamePlayer->player_id, $sessionPlayerIds)) {
-                $sessionPlayers[] = new SessionPlayer([
+                $players->push(new SessionPlayer([
                     'session_id' => $session->id,
                     'player_id' => $gamePlayer->player_id,
-                ]);
+                    'name' => $gamePlayer->name,
+                ]));
             }
         }
+        return $players;
     }
     
     private function updatePlayerData(Models\SessionPlayer $sessionPlayer, Models\Game $game): void
@@ -75,18 +86,23 @@ class UpdateSessionPlayers
     private function updateStreaks(Models\SessionPlayer $sessionPlayer, ?Models\GamePlayer $gamePlayer): void
     {
         if (null === $gamePlayer) {
+            $sessionPlayer->catching_streak = 0;
             $sessionPlayer->running_streak = 0;
             $sessionPlayer->resting_streak += 1;
-        } else {
-            $sessionPlayer->running_streak = $gamePlayer->catcher ?
-                0 : ($sessionPlayer->running_streak + 1);
+        } elseif ($gamePlayer->isCatcher()) {
+            $sessionPlayer->catching_streak += 1;
+            $sessionPlayer->running_streak = 0;
+            $sessionPlayer->resting_streak = 0;
+        } elseif ($gamePlayer->isRunner()) {
+            $sessionPlayer->catching_streak = 0;
+            $sessionPlayer->running_streak += 1;
             $sessionPlayer->resting_streak = 0;
         }
     }
     
     private function updateCondition(Models\SessionPlayer $sessionPlayer, ?Models\GamePlayer $gamePlayer): void
     {
-        if ($gamePlayer?->catcher) {
+        if ($gamePlayer?->isCatcher()) {
             $sessionPlayer->condition = Models\PlayerCondition::Running;
         } elseif (
             (Models\PlayerCondition::Resting !== $sessionPlayer->condition)

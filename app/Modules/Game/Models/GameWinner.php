@@ -4,13 +4,11 @@ namespace App\Modules\Game\Models;
 
 use App\Common\Utils\EnumArrayTrait;
 
-enum SessionStatus: string
+enum GameWinner: int
 {
     use EnumArrayTrait;
     
-    case Pending = 'pending';
+    case Catchers = 1;
     
-    case Active = 'active';
-    
-    case Ended = 'ended';
+    case Runners = 2;
 }

@@ -3,6 +3,7 @@
 namespace App\Modules\Game\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Game extends Model
@@ -17,9 +18,9 @@ class Game extends Model
         'started_at',
         'stopped_at',
         'completed_at',
-        'pause_duration',
         'duration',
-        'catchers_win',
+        'pause_duration',
+        'winner',
     ];
     
     protected $casts = [
@@ -27,11 +28,27 @@ class Game extends Model
         'started_at' => 'datetime',
         'stopped_at' => 'datetime',
         'completed_at' => 'datetime',
+        'winner' => GameWinner::class,
     ];
 
+    public function session(): BelongsTo
+    {
+        return $this->belongsTo(Session::class, 'session_id');
+    }
+    
     public function players(): HasMany
     {
-        return $this->hasOne(GamePlayer::class, 'game_id');
+        return $this->hasMany(GamePlayer::class, 'game_id');
+    }
+    
+    public function catchers(): HasMany
+    {
+        return $this->hasMany(GamePlayer::class, 'game_id')->where('role', GameRole::Catcher);
+    }
+    
+    public function runners(): HasMany
+    {
+        return $this->hasMany(GamePlayer::class, 'game_id')->where('role', GameRole::Runner);
     }
     
     public function isDraft(): bool
@@ -42,6 +59,11 @@ class Game extends Model
     public function isOngoing(): bool
     {
         return GameStatus::Ongoing === $this->status;
+    }
+    
+    public function isStopped(): bool
+    {
+        return GameStatus::Stopped === $this->status;
     }
     
     public function isCompleted(): bool
@@ -56,12 +78,22 @@ class Game extends Model
     
     public function isCatchersWin(): bool
     {
-        return (bool)$this->catchers_win;
+        return $this->winner === GameWinner::Catchers;
     }
     
     public function isRunnersWin(): bool
     {
-        return !$this->catchers_win && ($this->catchers_win !== null);
+        return $this->winner === GameWinner::Runners;
+    }
+    
+    public function calculateDuration(): ?int
+    {
+        if (null === $this->started_at) {
+            return null;
+        }
+        
+        $stoppedAt = $this->stopped_at?->getTimestamp() ?? time();
+        return $stoppedAt - $this->started_at->getTimestamp() - $this->pause_duration;
     }
 }
 

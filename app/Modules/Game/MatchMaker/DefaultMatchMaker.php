@@ -10,12 +10,12 @@ class DefaultMatchMaker implements MatchMakerInterface
     #[\Override]
     public function suggestPlayers(Models\Game $game): Collection
     {
-        $groupedPlayers = $this->groupPlayersByCondition($game->session->players());
-        $suggested = new Collection();
-        $suggested->merge($this->fetchCatchers($groupedPlayers, $game->catchers_count));
-        $suggested->merge($this->fetchRunners($groupedPlayers, $game->runners_count));
+        $groupedPlayers = $this->groupPlayersByCondition($game->session->players);
         
-        return $suggested->map(function (Models\GamePlayer $player) use ($game) {
+        $catchers = $this->fetchCatchers($groupedPlayers, $game->catchers_count);
+        $runners = $this->fetchRunners($groupedPlayers, $game->runners_count);
+        
+        return $catchers->merge($runners)->map(function (Models\GamePlayer $player) use ($game) {
             $player->game_id = $game->id;
             return $player;
         });
@@ -33,7 +33,7 @@ class DefaultMatchMaker implements MatchMakerInterface
         $callback = function (Models\PlayerCondition $condition) use ($players) {
             return $players->filter(function (Models\SessionPlayer $player) use ($condition) {
                 return $condition === $player->condition;
-            })->all();
+            })->shuffle();
         };
         
         return array_map($callback, $conditions);
@@ -43,7 +43,7 @@ class DefaultMatchMaker implements MatchMakerInterface
     {
         return $this->fetchPlayers($groupedPlayers, $count)
             ->map(function (Models\GamePlayer $player) {
-                $player->catcher = true;
+                $player->role = Models\GameRole::Catcher;
                 return $player;
             });
     }
@@ -52,7 +52,7 @@ class DefaultMatchMaker implements MatchMakerInterface
     {
         return $this->fetchPlayers($groupedPlayers, $count)
             ->map(function (Models\GamePlayer $player) {
-                $player->catcher = false;
+                $player->role = Models\GameRole::Runner;
                 return $player;
             });
     }
@@ -63,8 +63,18 @@ class DefaultMatchMaker implements MatchMakerInterface
         $playersLeft = $count;
         
         foreach ($groupedPlayers as $key => $group) {
-            $players->merge($group->shuffle()->shift($playersLeft));
-            $playersLeft -= $players->count();
+            if ($group->isEmpty()) {
+                unset($groupedPlayers[$key]);
+                continue;
+            }
+            
+            if (1 === $playersLeft) {
+                $players->push($group->shift($playersLeft));
+            } else {
+                $players = $players->merge($group->shift($playersLeft));
+            }
+            
+            $playersLeft = $count - $players->count();
             
             if ($group->isEmpty()) {
                 unset($groupedPlayers[$key]);
@@ -79,6 +89,7 @@ class DefaultMatchMaker implements MatchMakerInterface
         
         return $players->map(function (Models\SessionPlayer $player) {
             return new Models\GamePlayer([
+                'name' => $player->name,
                 'player_id' => $player->player_id,
             ]);
         });

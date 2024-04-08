@@ -2,8 +2,10 @@
 
 namespace App\Modules\Game;
 
+use App\Modules\Game\MatchMaker\MatchMakerInterface;
 use App\Modules\Game\Models;
-use App\Modules\Game\Requests\Commands\Game as Commands;
+use App\Modules\Game\Requests\Game\Commands;
+use App\Modules\Game\Requests\Game\Queries;
 use App\Modules\Game\Events;
 
 class GameService
@@ -12,19 +14,35 @@ class GameService
         private readonly MatchMakerInterface $matchMaker,
     ) {}
     
-    public function init(Commands\InitGame $command): Models\Game
+    public function get(Queries\GetGame $query): Models\Game
+    {
+        return Models\Game::findOrFail($query->id);
+    }
+    
+    public function create(Commands\CreateGame $command): Models\Game
     {
         $session = Models\Session::findOrFail($command->sessionId);
         
-        $this->guardGamesCannotBeModifiedIfTheSessionIsClosed($session);
+        $this->guardGamesCannotBeModifiedIfTheSessionIsEnded($session);
         
-        $game = new Models\Game([
-            'session_id' => $session->id,
-            'status' => Models\GameStatus::Draft,
-            'catchers_count' => $command->catchersCount,
-            'runners_count' => $command->runnersCount,
-        ]);
-        $game->save();
+        $lastGame = $session->games->last();
+        if ($session->games->last()?->isDraft()) {
+            $game = $lastGame;
+            $game->update([
+                'catchers_count' => $command->catchersCount,
+                'runners_count' => $command->runnersCount,
+            ]);
+            Models\GamePlayer::where('game_id', $game->id)->delete();
+        } elseif (is_null($lastGame) || $lastGame?->isCompleted() || $lastGame?->isAborted()) {
+            $game = Models\Game::create([
+                'session_id' => $session->id,
+                'status' => Models\GameStatus::Draft,
+                'catchers_count' => $command->catchersCount,
+                'runners_count' => $command->runnersCount,
+            ]);
+        } else {
+            throw new \DomainException('To start a new game, a current game must be completed or aborted');
+        }
         
         $players = $this->matchMaker->suggestPlayers($game);
         foreach ($players as $player) {
@@ -33,32 +51,22 @@ class GameService
         return $game;
     }
     
-    private function guardGamesCannotBeModifiedIfTheSessionIsClosed(Models\Session $session): void
+    private function guardGamesCannotBeModifiedIfTheSessionIsEnded(Models\Session $session): void
     {
-        if ($session->isClosed()) {
-            throw new \DomainException('Games cannot be modified if the session is closed');
+        if ($session->isEnded()) {
+            throw new \DomainException('Games cannot be modified if the session is ended');
         }
     }
     
-    public function reroll(Commands\RerolGame $command): Models\Game
+    public function reroll(Commands\RerollGame $command): Models\Game
     {
         $game = Models\Game::findOrFail($command->id);
         
         if (!$game->isDraft()) {
-            throw new \DomainException('Only non-draft games can be rerolled');
+            throw new \DomainException('A game can be re-rolled only while it is a draft');
         }
         
-        $this->guardGamesCannotBeModifiedIfTheSessionIsClosed($game->session);
-        
-        if (
-            ($game->catchersCount !== $command->catchersCount)
-            || ($game->runnersCount !== $command->runnersCount)
-        ) {
-            $game->update([
-                'catchers_count' => $command->catchersCount,
-                'runners_count' => $command->runnersCount,
-            ]);
-        }
+        $this->guardGamesCannotBeModifiedIfTheSessionIsEnded($game->session);
         
         Models\GamePlayer::where('game_id', $game->id)->delete();
         $players = $this->matchMaker->suggestPlayers($game);
@@ -73,10 +81,10 @@ class GameService
         $game = Models\Game::findOrFail($command->id);
         
         if (!$game->isDraft()) {
-            throw new \DomainException('Only non-draft games can be started');
+            throw new \DomainException('A game can be started only while it is a draft');
         }
         
-        $this->guardGamesCannotBeModifiedIfTheSessionIsClosed($game->session);
+        $this->guardGamesCannotBeModifiedIfTheSessionIsEnded($game->session);
         
         $game->update([
             'status' => Models\GameStatus::Ongoing,
@@ -91,14 +99,15 @@ class GameService
         $game = Models\Game::findOrFail($command->id);
         
         if (!$game->isOngoing()) {
-            throw new \DomainException('Only ongoing game can be stopped');
+            throw new \DomainException('The game can only be stopped while it is ongoing');
         }
         
-        $this->guardGamesCannotBeModifiedIfTheSessionIsClosed($game->session);
+        $this->guardGamesCannotBeModifiedIfTheSessionIsEnded($game->session);
         
         $game->update([
             'status' => Models\GameStatus::Stopped,
             'stopped_at' => new \DateTimeImmutable(),
+            'duration' => $game->calculateDuration(),
         ]);
         
         return $game;
@@ -109,10 +118,10 @@ class GameService
         $game = Models\Game::findOrFail($command->id);
         
         if (!$game->isStopped()) {
-            throw new \DomainException('Only stopped game can be resumed');
+            throw new \DomainException('Only a stopped game can be resumed');
         }
         
-        $this->guardGamesCannotBeModifiedIfTheSessionIsClosed($game->session);
+        $this->guardGamesCannotBeModifiedIfTheSessionIsEnded($game->session);
         
         $game->update([
             'status' => Models\GameStatus::Ongoing,
@@ -125,34 +134,7 @@ class GameService
     
     private function calculatePauseDuration(Models\Game $game): int
     {
-        return $game->pause_duration + (time() - $game->stopped_at()->getTimestamp());
-    }
-    
-    public function complete(Commands\CompleteGame $command): Models\Game
-    {
-        $game = Models\Game::findOrFail($command->id);
-        
-        if (!$game->isStopped()) {
-            throw new \DomainException('Only stopped game can completed');
-        }
-        
-        $this->guardGamesCannotBeModifiedIfTheSessionIsClosed($game->session);
-        
-        $game->update([
-            'status' => Models\GameStatus::Completed,
-            'completed_at' => new \DateTimeImmutable(),
-            'duration' => $command->duration ?? $this->calculateGameDuration($game),
-            'catchersWin' => (bool)$command->catchersWin,
-        ]);
-        
-        Events\GameCompleted::dispatch($game);
-        
-        return $game;
-    }
-    
-    private function calculateGameDuration(Models\Game $game): int
-    {
-        return time() - $game->started_at->getTimestamp() - $game->pause_duration;
+        return $game->pause_duration + (time() - ($game->stopped_at?->getTimestamp() ?? 0));
     }
     
     public function abort(Commands\AbortGame $command): Models\Game
@@ -160,14 +142,36 @@ class GameService
         $game = Models\Game::findOrFail($command->id);
         
         if (!$game->isStopped()) {
-            throw new \DomainException('Only stopped game can aborted');
+            throw new \DomainException('Only a stopped game can be aborted');
         }
         
         $game->update([
             'status' => Models\GameStatus::Aborted,
             'completed_at' => new \DateTimeImmutable(),
+            'duration' => $game->calculateDuration(),
         ]);
         
+        return $game;
+    }
+    
+    public function complete(Commands\CompleteGame $command): Models\Game
+    {
+        $game = Models\Game::findOrFail($command->id);
+        
+        if (!$game->isStopped()) {
+            throw new \DomainException('Only a stopped game can be completed');
+        }
+        
+        $this->guardGamesCannotBeModifiedIfTheSessionIsEnded($game->session);
+        
+        $game->update([
+            'status' => Models\GameStatus::Completed,
+            'completed_at' => new \DateTimeImmutable(),
+            'duration' => $command->duration ?? $game->calculateDuration(),
+            'winner' => $command->winner,
+        ]);
+        
+        Events\GameCompleted::dispatch($game);
         return $game;
     }
     
@@ -175,7 +179,7 @@ class GameService
     {
         $prototype = Models\Game::findOrFail($command->id);
         
-        $this->guardGamesCannotBeModifiedIfTheSessionIsClosed($prototype->session);
+        $this->guardGamesCannotBeModifiedIfTheSessionIsEnded($prototype->session);
         
         $game = new Models\Game([
             'session_id' => $prototype->session_id,
@@ -189,7 +193,8 @@ class GameService
             Models\GamePlayer::create([
                 'game_id' => $game->id,
                 'player_id' => $player->player_id,
-                'catcher' => $player->catcher,
+                'name' => $player->name,
+                'role' => $player->role,
             ]);
         }
         

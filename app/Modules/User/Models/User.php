@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Contracts\Hashing\Hasher;
+
 use App\Modules\Player\Models\Player;
 
 class User extends Authenticatable
@@ -23,8 +25,10 @@ class User extends Authenticatable
      * @var array<int, string>
      */
     protected $fillable = [
+        'name',
         'email',
         'password',
+        'role',
         'player_id',
     ];
 
@@ -46,7 +50,26 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'role' => Role::class,
     ];
+    
+    protected $attributes = [
+        'role' => Role::Player,
+    ];
+    
+    public static function generatePassword(): string
+    {
+        return substr(md5(rand(0, 1000000)), 0, 5);
+    }
+    
+    public function hashPassword(Hasher $hasher, string $password = null): void
+    {
+        if (empty($password)) {
+            return;
+        }
+
+        $this->password = $hasher->needsRehash($password) ? $hasher->make($password) : $password;
+    }
     
     public function telegram(): HasOne
     {
@@ -56,5 +79,10 @@ class User extends Authenticatable
     public function player(): BelongsTo
     {
         return $this->belongsTo(Player::class, 'player_id');
+    }
+    
+    public function canOrganizeGames(): bool
+    {
+        return in_array($this->role, [Role::Organizer, Role::Admin]);
     }
 }

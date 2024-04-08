@@ -15,4 +15,14 @@ enum PlayerCondition: string
     case Running = 'running';
     
     case Resting = 'resting';
+    
+    public function emoji(): string
+    {
+        return match ($this) {
+            self::Ready => '🆗',
+            self::Catching => '🟠',
+            self::Running => '🟢',
+            self::Resting => '💤',
+        };
+    }
 }

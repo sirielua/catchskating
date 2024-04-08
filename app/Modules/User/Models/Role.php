@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Player\Models;
+namespace App\Modules\User\Models;
 
 use App\Common\Utils\EnumArrayTrait;
 
