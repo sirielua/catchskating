@@ -1,8 +1,7 @@
 <?php
 /** @var SergiX44\Nutgram\Nutgram $bot */
 
-use SergiX44\Nutgram\Nutgram;
-use App\Http\Controllers\Telegram\WeebhookController;
+use App\TelegramBot\Handlers;
 /*
 |--------------------------------------------------------------------------
 | Nutgram Handlers
@@ -13,24 +12,30 @@ use App\Http\Controllers\Telegram\WeebhookController;
 |
 */
 
-Route::post('/telegram-webhook', WeebhookController::class);
+$bot->onCommand('start', Handlers\StartHandler::class)->description('The start command!');
+$bot->onCommand('rules', Handlers\RulesHandler::class)->description('Rules command!');
 
-$bot->onCommand('start', function (Nutgram $bot) {
-    $bot->sendMessage('Hello, world!');
-})->description('The start command!');
+$bot->onCommand('registration', Handlers\RegistrationHandler::class)
+    ->description('Register new player');
+$bot->onCommand('register', Handlers\RegistrationHandler::class)
+    ->description('Register new player');
 
-$bot->onException(\DomainException::class, function (Nutgram $bot, \Throwable $exception) {
-    $bot->sendMessage(sprintf('Error: %s', $exception->getMessage()));
-});
+$bot->onCommand('player {id}', Handlers\PlayerHandler::class)
+    ->whereNumber('id')
+    ->description('View player profile');
+$bot->onCommand('player', Handlers\PlayerHandler::class)
+    ->description('View your player profile');
 
-$bot->onException(function (Nutgram $bot, \Throwable $exception) {
-    $bot->sendMessage('Something went wrong...');
-});
+$bot->onCommand('newsession', Handlers\CreateSessionHandler::class)
+    ->description('Create new game session');
+$bot->onCommand('sessions', Handlers\SessionsHandler::class)
+    ->description('View available game sessions');
+$bot->onCommand('session {id}', Handlers\SessionHandler::class)
+    ->whereNumber('id')
+    ->description('View your selected game session');
+$bot->onCommand('play', Handlers\PlayHandler::class)
+    ->description('View your current game session');
 
-$bot->fallback(function (Nutgram $bot) {
-    $bot->sendMessage(sprintf(
-        'Can\'t understand ya, %s. Your message was: "%s"',
-        $bot->message()?->from?->first_name,
-        $bot->message()?->text,
-    ));
-});
+$bot->onException(\DomainException::class, Handlers\DomainExceptionHandler::class);
+$bot->onException(Handlers\FallbackExceptionHandler::class);
+$bot->fallback(Handlers\FallbackHandler::class);

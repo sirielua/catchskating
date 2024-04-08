@@ -7,7 +7,10 @@ use Illuminate\Support\ServiceProvider;
 class AppServiceProvider extends ServiceProvider
 {
     private $providers = [
-        \App\Modules\Game\Providers\ModuleProvider::class,
+        \App\TelegramBot\Providers\TelegramBotProvider::class,
+        \App\Modules\User\UserServiceProvider::class,
+        \App\Modules\Player\PlayerServiceProvider::class,
+        \App\Modules\Game\GameServiceProvider::class,
     ];
     
     /**
