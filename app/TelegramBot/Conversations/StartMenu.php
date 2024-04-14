@@ -8,11 +8,38 @@ use SergiX44\Nutgram\Nutgram;
 use SergiX44\Nutgram\Telegram\Types\Keyboard;
 use App\TelegramBot\Handlers;
 use App\Modules\Player\Models\Player;
+use App\TelegramBot\Helpers\MarkdownHelper;
 use Carbon\CarbonInterval;
 
 class StartMenu extends InlineMenu
 {
     use PlayersTrait;
+    
+    private const MESSAGES = [
+        'guestWelcome' =>
+           <<<END
+            Вітаю в світі чаклунів, *%s*!
+            =======
+            
+            Для початку тобі треба зареєструватись.
+            END,
+        'welcome' => 
+            <<<END
+            Вітаю, *%s* #%s
+            =======
+            \n
+            END,
+        'inactivityTime' =>
+            <<<END
+            Ви не грали в чаклуни вже %s...
+            \n
+            END,
+        'shortSummary' =>
+            <<<END
+            *Зіграно матчей*: %s
+            *Сумарний час*: %s
+            END,
+    ];
     
     public function start(Nutgram $bot): void
     {
@@ -90,43 +117,39 @@ class StartMenu extends InlineMenu
                 ->forHumans()
             : 0;
         
-        $message = 
-            <<<END
-            Вітаю, *$player->name* #$player->id
-            =======
-            \n
-            END;
+        $message = sprintf(
+            self::MESSAGES['welcome'],
+            MarkdownHelper::escape($player->name),
+            $player->id,
+        );
         
         if ($player->last_played_at) {
             $inactiveTime = CarbonInterval::seconds(time() - $player->last_played_at->getTimestamp())
                 ->cascade()
                 ->forHumans();
             
-            $message .=
-            <<<END
-            Ви не грали в чаклуни вже $inactiveTime...
-            \n
-            END;
+            $message .= sprintf(
+                self::MESSAGES['inactivityTime'],
+                $inactiveTime,
+            );
         }
         
-        $message .=
-            <<<END
-            *Зіграно матчей*: $player->games_total
-            *Сумарний час*: $totalTime
-            END;
+        $message .= sprintf(
+            self::MESSAGES['shortSummary'],
+            $player->games_total,
+            $totalTime,
+        );
         
         $this->menuText($message, opt: ['parse_mode' => 'markdown']);
     }
     
     private function setGuestWelcomeMessage(Nutgram $bot): void
     {
-        $message = 
-            <<<END
-            Вітаю в світі чаклунів, *{$bot->user()->first_name}*!
-            =======
-            
-            Для початку тобі треба зареєструватись.
-            END;
+        $message = sprintf(
+            self::MESSAGES['guestWelcome'],
+            MarkdownHelper::escape($bot->user()->first_name),
+        );
+        
         $this->menuText($message, opt: ['parse_mode' => 'markdown']);
     }
 }

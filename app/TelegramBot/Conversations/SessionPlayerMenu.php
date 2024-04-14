@@ -12,6 +12,7 @@ use App\Modules\Game\Models\Session;
 use App\Modules\Game\Models\SessionPlayer;
 use App\Modules\Game\Models\PlayerCondition;
 use App\Modules\Player\Models\Player;
+use App\TelegramBot\Helpers\MarkdownHelper;
 use Carbon\CarbonInterval;
 
 class SessionPlayerMenu extends InlineMenu
@@ -67,7 +68,7 @@ class SessionPlayerMenu extends InlineMenu
             self::MESSAGES['info'],
             $session->id,
             $sessionPlayer->player_id,
-            $sessionPlayer->name,
+            MarkdownHelper::escape($sessionPlayer->name),
             $sessionPlayer->condition->emoji(),
         );
         

@@ -15,6 +15,7 @@ use App\Modules\Game\Models\PlayerCondition;
 use App\Modules\Game\Models\Game;
 use App\Modules\Game\Models\GamePlayer;
 use App\Modules\Game\Models\GameWinner;
+use App\TelegramBot\Helpers\MarkdownHelper;
 use Carbon\CarbonInterval;
 
 class SessionGameMenu extends InlineMenu
@@ -31,14 +32,12 @@ class SessionGameMenu extends InlineMenu
         'infoGame' => 
             <<<END
             *Сессія #%s*, *Гра #%s* \[%s]:
-            -----------
             
             *Доганяють* [%s]:
             %s
             
             *Втікають* [%s]:
             %s
-             -----------
             \n
             END,
         'gameResult' => 
@@ -78,7 +77,7 @@ class SessionGameMenu extends InlineMenu
     private function setInfoMessage(Nutgram $bot, Session $session): void
     {
         $game = $session->games->last();
-        if (null == $game) {
+        if (null === $game) {
             $message = sprintf(
                 self::MESSAGES['infoClear'],
                 $session->id,
@@ -91,14 +90,14 @@ class SessionGameMenu extends InlineMenu
                 $game->status->value,
                 $game->catchers_count,
                 implode(', ', $game->catchers->map(function (GamePlayer $player) {
-                    return $player->name;
+                    return MarkdownHelper::escape($player->name);
                 })->all()),
                 $game->runners_count,
                 implode(', ', $game->runners->map(function (GamePlayer $player) {
-                    return $player->name;
+                    return MarkdownHelper::escape($player->name);
                 })->all()),
             );
-                
+            
             if ($game->isCompleted()) {
                 $message .= sprintf(
                     self::MESSAGES['gameResult'],
@@ -115,7 +114,7 @@ class SessionGameMenu extends InlineMenu
                         ->cascade()
                         ->forHumans(),
                 );
-            }  
+            }
         }
         
         $message .= sprintf(
@@ -166,7 +165,11 @@ class SessionGameMenu extends InlineMenu
     private function getPlayerButton(SessionPlayer $player): Keyboard\InlineKeyboardButton
     {
         return Keyboard\InlineKeyboardButton::make(
-            sprintf('%s %s', $player->condition->emoji(), $player->name),
+            sprintf(
+                '%s %s',
+                $player->condition->emoji(),
+                $player->name,
+            ),
             callback_data: $player->player_id.'@'.'player'
         );
     }

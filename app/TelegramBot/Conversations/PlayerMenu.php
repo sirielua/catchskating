@@ -8,12 +8,49 @@ use SergiX44\Nutgram\Nutgram;
 use SergiX44\Nutgram\Telegram\Types\Keyboard;
 use App\TelegramBot\Handlers;
 use App\Modules\Player\Models\Player;
+use App\TelegramBot\Helpers\MarkdownHelper;
 use Carbon\CarbonInterval;
 
 class PlayerMenu extends InlineMenu
 {
     use PlayersTrait;
     
+    private const MESSAGES = [
+        'statisticsHeader' => 
+            <<<END
+            *%s* #%s
+            \n
+            END,
+        'statisticsGeneral' =>
+            <<<END
+            *Статистика*
+        
+            *Зіграно матчей*: %s
+            *Перемоги*: %s (%s)
+            *Поразки*: %s (%s)
+            *Сумарний час*: %s
+            \n
+            END,
+        'statisticsCatchers' =>
+            <<<END
+            *За доганяючих*
+            
+            *Зіграно матчей*: %s
+            *Перемоги*: %s (%s)
+            *Поразки*: %s (%s)
+            *Сумарний час*: %s
+            \n
+            END,
+        'statisticsRunners' =>
+            <<<END
+            *За втікаючих*
+            
+            *Зіграно матчей*: %s
+            *Перемоги*: %s (%s)
+            *Поразки*: %s (%s)
+            *Сумарний час*: %s
+            END,
+    ];
     public function start(Nutgram $bot, ?int $id = null): void
     {
         if (null === $id) {
@@ -90,31 +127,39 @@ class PlayerMenu extends InlineMenu
                 ->forHumans()
             : 0;
         
-        $message = 
-            <<<END
-            *$player->name* #$player->id
+        $message = sprintf(
+            self::MESSAGES['statisticsHeader'],
+            MarkdownHelper::escape($player->name),
+            $player->id,
+        );
+        $message .= sprintf(
+            self::MESSAGES['statisticsGeneral'],
+            $player->games_total,
+            $player->wins_total,
+            $winPercent.'%',
+            $player->loses_total,
+            $losePercent.'%',
+            $totalTime,
+        );
+        $message .= sprintf(
+            self::MESSAGES['statisticsCatchers'],
+            $player->games_as_catcher,
+            $player->wins_as_catcher,
+            $catcherWinPercent.'%',
+            $player->loses_as_catcher,
+            $catcherLosePercent.'%',
+            $timeCatching,
+        );
+        $message .= sprintf(
+            self::MESSAGES['statisticsRunners'],
+            $player->games_as_runner,
+            $player->wins_as_runner,
+            $runnerWinPercent.'%',
+            $player->loses_as_runner,
+            $runnerLosePercent.'%',
+            $timeRunning,
+        );
 
-            Статистика
-            -----------
-            *Зіграно матчей*: $player->games_total
-            *Перемоги*: $player->wins_total ($winPercent%)
-            *Поразки*: $player->loses_total ($losePercent%)
-            *Сумарний час*: $totalTime
-
-            За доганяючих
-            -----------
-            *Зіграно матчей*: $player->games_as_catcher
-            *Перемоги*: $player->wins_as_catcher ($catcherWinPercent%)
-            *Поразки*: $player->loses_as_catcher ($catcherLosePercent%)
-            *Сумарний час*: $timeCatching
-
-            За втікаючих
-            -----------
-            *Зіграно матчей*: $player->games_as_runner
-            *Перемоги*: $player->wins_as_runner ($runnerWinPercent%)
-            *Поразки*: $player->loses_as_runner ($runnerLosePercent%)
-            *Сумарний час*: $timeRunning
-            END;
         $this->menuText($message, opt: ['parse_mode' => 'markdown']);
     }
     

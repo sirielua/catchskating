@@ -23,7 +23,7 @@ class RegistrationService
         
         $user = new Models\User([
             'name' => $command->name,
-            'role' => Models\Role::Organizer, /// TODO: for testing purposes
+            'role' => Models\Role::Organizer,
             'player_id' => $player->id,
         ]);
         $user->hashPassword($this->hasher, $password = Models\User::generatePassword());

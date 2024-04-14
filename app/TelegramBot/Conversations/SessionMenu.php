@@ -10,6 +10,7 @@ use SergiX44\Nutgram\Telegram\Types\Keyboard;
 use App\TelegramBot\Handlers;
 use App\Modules\Game\Models\Session;
 use App\Modules\Player\Models\Player;
+use App\TelegramBot\Helpers\MarkdownHelper;
 
 class SessionMenu extends InlineMenu
 {
@@ -100,7 +101,7 @@ class SessionMenu extends InlineMenu
             foreach ($session->players as $player) {
                 $message .= sprintf(
                     self::MESSAGES['player'],
-                    $player->name,
+                    MarkdownHelper::escape($player->name),
                     $player->condition->value,
                 );
             }
