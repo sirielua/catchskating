@@ -14,8 +14,8 @@ class FallbackExceptionHandler
         } elseif (App::hasDebugModeEnabled()) {
             $bot->sendMessage(sprintf('%s. File: %s. Line: %s', $exception->getMessage(), $exception->getFile(), $exception->getLine()));
         } else {
-            $bot->sendMessage('Щось пішло не так...');
+            $bot->sendMessage('Щось пішло не так... Спробуйте /start чи /play');
         }
-        $bot->invoke(PlayHandler::class);
+//        $bot->invoke(PlayHandler::class);
     }
 }
