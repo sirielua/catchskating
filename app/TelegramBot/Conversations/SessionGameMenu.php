@@ -12,7 +12,6 @@ use App\TelegramBot\Handlers;
 use App\Modules\Game\Models\Session;
 use App\Modules\Game\Models\SessionPlayer;
 use App\Modules\Game\Models\PlayerCondition;
-use App\Modules\Game\Models\Game;
 use App\Modules\Game\Models\GamePlayer;
 use App\Modules\Game\Models\GameWinner;
 use App\TelegramBot\Helpers\MarkdownHelper;
@@ -158,7 +157,7 @@ class SessionGameMenu extends InlineMenu
             }
 
             $this->addButtonRow(...$playerButtons);
-//            $this->addButtonRow(...$conditionButtons);
+            $this->addButtonRow(...$conditionButtons);
         }
     }
     
@@ -211,6 +210,7 @@ class SessionGameMenu extends InlineMenu
         } elseif ($currentGame?->isOngoing()) {
             $this->addButtonRow(
                 Keyboard\InlineKeyboardButton::make('Стоп ⏸', callback_data: '@'.'handleStop'),
+                Keyboard\InlineKeyboardButton::make('Завершити ✅', callback_data: '@'.'handleComplete'),
             );
         } elseif ($currentGame?->isStopped()) {
             $this->addButtonRow(
@@ -222,6 +222,7 @@ class SessionGameMenu extends InlineMenu
         
         $this->addButtonRow(
             Keyboard\InlineKeyboardButton::make('Сессія', callback_data: '@'.'viewSession'),
+//            Keyboard\InlineKeyboardButton::make('"Всі готові"', callback_data: '@'.'resetConditions'),
             Keyboard\InlineKeyboardButton::make('Оновити', callback_data: '@'.'refresh'),
         );
     }
@@ -255,6 +256,21 @@ class SessionGameMenu extends InlineMenu
             );
             $this->start($bot, $this->sessionId);
         }
+    }
+    
+    public function resetConditions(Nutgram $bot)
+    {
+        $players = $this->getSession($this->sessionId)?->players();
+        if ($players) {
+            foreach ($players as $player) {
+                $this->updateCondition(
+                    $player->session_id,
+                    $player->player_id,
+                    PlayerCondition::Ready->value,
+                );
+            }
+        }
+        $this->start($bot, $this->sessionId);
     }
     
     public function handleDraft(Nutgram $bot)
@@ -349,6 +365,9 @@ class SessionGameMenu extends InlineMenu
         $this->end();
         $session = $this->getSession($this->sessionId);
         $game = $session->games->last();
+        if ($game->isOngoing()) {
+            $this->stopGame($game->id);
+        }
         GameCompleteConversation::begin($bot, data: ['gameId' => $game->id]);
     }
     

@@ -10,7 +10,7 @@ use SergiX44\Nutgram\Telegram\Types\Keyboard;
 
 class GameDraftConversation extends Conversation
 {
-    use SessionsTrait, GamesTrait;
+use SessionsTrait, GamesTrait, PlayersTrait;
     
     private const CONFIRM = '1';
     private const DECLINE = '0';
@@ -75,23 +75,24 @@ class GameDraftConversation extends Conversation
         $this->catchers = $catchers;
         $this->runners = $runners;
         
-        $this->confirm($bot);
-    }
-    
-    private function confirm(Nutgram $bot)
-    {
-        $bot->sendMessage(
-            text: sprintf('Граємо *%s vs %s*. Вірно?', $this->catchers, $this->runners),
-            parse_mode: 'markdown',
-            reply_markup: Keyboard\InlineKeyboardMarkup::make()
-                ->addRow(
-                    Keyboard\InlineKeyboardButton::make('Так', callback_data: self::CONFIRM),
-                    Keyboard\InlineKeyboardButton::make('Ні', callback_data: self::DECLINE),
-                )
-        );
-        
+//        $this->confirm($bot);
         $this->next('handleCreateDraft');
     }
+    
+//    private function confirm(Nutgram $bot)
+//    {
+//        $bot->sendMessage(
+//            text: sprintf('Граємо *%s vs %s*. Вірно?', $this->catchers, $this->runners),
+//            parse_mode: 'markdown',
+//            reply_markup: Keyboard\InlineKeyboardMarkup::make()
+//                ->addRow(
+//                    Keyboard\InlineKeyboardButton::make('Так', callback_data: self::CONFIRM),
+//                    Keyboard\InlineKeyboardButton::make('Ні', callback_data: self::DECLINE),
+//                )
+//        );
+//        
+//        $this->next('handleCreateDraft');
+//    }
     
     public function handleCreateDraft(Nutgram $bot)
     {
@@ -108,6 +109,23 @@ class GameDraftConversation extends Conversation
         $this->end();
         
         $this->draftGame($this->sessionId, $this->catchers, $this->runners);
+        $this->resetConditions();
         SessionGameMenu::begin($bot, data: ['sessionId' => $this->sessionId]);
+    }
+    
+    private function resetConditions()
+    {
+        $players = $this->getSession($this->sessionId)?->players();
+        if (!$players) {
+            return;
+        }
+        
+        foreach ($players as $player) {
+            $this->updateCondition(
+                $player->session_id,
+                $player->player_id,
+                PlayerCondition::Ready->value,
+            );
+        }
     }
 }
