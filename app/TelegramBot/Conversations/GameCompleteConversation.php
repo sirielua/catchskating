@@ -111,8 +111,7 @@ class GameCompleteConversation extends Conversation
             return;
         }
         
-//        $this->confirm($bot);
-        $this->next('handleCompleteGame');
+        $this->handleCompleteGame($bot);
     }
     
     private function parseDuration($input): ?int
@@ -129,35 +128,9 @@ class GameCompleteConversation extends Conversation
         return null;
     }
     
-//    private function confirm(Nutgram $bot)
-//    {
-//        $bot->sendMessage(
-//            text: sprintf(
-//                self::MESSAGES['gameResult'],
-//                $this->winner === self::CATCHERS ? 'Доганяючі' : 'Втікаючі',
-//                CarbonInterval::seconds($this->duration)
-//                    ->cascade()
-//                    ->forHumans(),
-//            ),
-//            parse_mode: 'markdown',
-//            reply_markup: Keyboard\InlineKeyboardMarkup::make()
-//                ->addRow(
-//                    Keyboard\InlineKeyboardButton::make('Так', callback_data: self::CONFIRM),
-//                    Keyboard\InlineKeyboardButton::make('Ні', callback_data: self::DECLINE),
-//                )
-//        );
-//        
-//        $this->next('handleCompleteGame');
-//    }
-    
-    public function handleCompleteGame(Nutgram $bot)
+    private function handleCompleteGame(Nutgram $bot)
     {
-        if (!$bot->isCallbackQuery()) {
-            $this->askWhoWon($bot);
-            return;
-        }
-        
-        if ((self::DECLINE === $bot->callbackQuery()->data) || empty($this->duration) || empty($this->winner)) {
+        if (empty($this->duration) || empty($this->winner)) {
             $this->askWhoWon($bot);
             return;
         }

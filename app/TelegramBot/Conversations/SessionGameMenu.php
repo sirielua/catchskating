@@ -25,13 +25,16 @@ class SessionGameMenu extends InlineMenu
         'infoClear' => 
             <<<END
             *Сессія #%s*:
+            \[%s гравців]
             -----------
             \n
             END,
         'infoGame' => 
             <<<END
             *Сессія #%s*, *Гра #%s* \[%s]:
-            
+            \[%s гравців]
+            -----------
+        
             *Доганяють* [%s]:
             %s
             
@@ -80,6 +83,7 @@ class SessionGameMenu extends InlineMenu
             $message = sprintf(
                 self::MESSAGES['infoClear'],
                 $session->id,
+                count($session->players),
             );
         } else {
             $message = sprintf(
@@ -87,6 +91,7 @@ class SessionGameMenu extends InlineMenu
                 $session->id,
                 $game->id,
                 $game->status->value,
+                count($session->players),
                 $game->catchers_count,
                 implode(', ', $game->catchers->map(function (GamePlayer $player) {
                     return MarkdownHelper::escape($player->name);
@@ -132,6 +137,43 @@ class SessionGameMenu extends InlineMenu
         
         $this->addPlayersConditionButtons($session);
         $this->addGameButtons($session);
+        $this->addSessionAndRefreshButtons($session);
+    }
+    
+    private function addGameButtons(Session $session)
+    {
+        $currentGame = $session->games->last();
+        
+        if (!$currentGame?->isOngoing() && !$currentGame?->isStopped()) {
+            $this->addButtonRow(
+                Keyboard\InlineKeyboardButton::make('Нова гра/Формат 🎭', callback_data: '@'.'handleDraft'), 
+            );
+        }
+        
+        if ($currentGame?->isCompleted() || $currentGame?->isAborted()) {
+            $this->addButtonRow(
+                Keyboard\InlineKeyboardButton::make('Наступна гра 🎲', callback_data: '@'.'handleNext'),
+                Keyboard\InlineKeyboardButton::make('Повтор 🔁', callback_data: '@'.'handleRepeat'),
+            );
+        }
+        
+        if ($currentGame?->isDraft()) {
+            $this->addButtonRow(
+                Keyboard\InlineKeyboardButton::make('Reroll 🎲', callback_data: '@'.'handleReroll'),
+                Keyboard\InlineKeyboardButton::make('Почати ▶️', callback_data: '@'.'handleStart'),
+            );
+        } elseif ($currentGame?->isOngoing()) {
+            $this->addButtonRow(
+                Keyboard\InlineKeyboardButton::make('Стоп ⏸', callback_data: '@'.'handleStop'),
+                Keyboard\InlineKeyboardButton::make('Завершити ✅', callback_data: '@'.'handleComplete'),
+            );
+        } elseif ($currentGame?->isStopped()) {
+            $this->addButtonRow(
+                Keyboard\InlineKeyboardButton::make('Продовжити ▶', callback_data: '@'.'handleResume'),
+                Keyboard\InlineKeyboardButton::make('Перервати ⏹️', callback_data: '@'.'handleAbort'),
+                Keyboard\InlineKeyboardButton::make('Завершити ✅', callback_data: '@'.'handleComplete'),
+            );
+        }
     }
     
     private function addPlayersConditionButtons(Session $session)
@@ -185,44 +227,10 @@ class SessionGameMenu extends InlineMenu
         }, ARRAY_FILTER_USE_KEY));
     }
     
-    private function addGameButtons(Session $session)
+    private function addSessionAndRefreshButtons(Session $session)
     {
-        $currentGame = $session->games->last();
-        
-        if (!$currentGame?->isOngoing() && !$currentGame?->isStopped()) {
-            $this->addButtonRow(
-                Keyboard\InlineKeyboardButton::make('Нова гра/Формат 🎭', callback_data: '@'.'handleDraft'), 
-            );
-        }
-        
-        if ($currentGame?->isCompleted() || $currentGame?->isAborted()) {
-            $this->addButtonRow(
-                Keyboard\InlineKeyboardButton::make('Наступна гра 🎲', callback_data: '@'.'handleNext'),
-                Keyboard\InlineKeyboardButton::make('Повтор 🔁', callback_data: '@'.'handleRepeat'),
-            );
-        }
-        
-        if ($currentGame?->isDraft()) {
-            $this->addButtonRow(
-                Keyboard\InlineKeyboardButton::make('Reroll 🎲', callback_data: '@'.'handleReroll'),
-                Keyboard\InlineKeyboardButton::make('Почати ▶️', callback_data: '@'.'handleStart'),
-            );
-        } elseif ($currentGame?->isOngoing()) {
-            $this->addButtonRow(
-                Keyboard\InlineKeyboardButton::make('Стоп ⏸', callback_data: '@'.'handleStop'),
-                Keyboard\InlineKeyboardButton::make('Завершити ✅', callback_data: '@'.'handleComplete'),
-            );
-        } elseif ($currentGame?->isStopped()) {
-            $this->addButtonRow(
-                Keyboard\InlineKeyboardButton::make('Продовжити ▶', callback_data: '@'.'handleResume'),
-                Keyboard\InlineKeyboardButton::make('Перервати ⏹️', callback_data: '@'.'handleAbort'),
-                Keyboard\InlineKeyboardButton::make('Завершити ✅', callback_data: '@'.'handleComplete'),
-            );
-        }
-        
         $this->addButtonRow(
             Keyboard\InlineKeyboardButton::make('Сессія', callback_data: '@'.'viewSession'),
-//            Keyboard\InlineKeyboardButton::make('"Всі готові"', callback_data: '@'.'resetConditions'),
             Keyboard\InlineKeyboardButton::make('Оновити', callback_data: '@'.'refresh'),
         );
     }
@@ -256,21 +264,6 @@ class SessionGameMenu extends InlineMenu
             );
             $this->start($bot, $this->sessionId);
         }
-    }
-    
-    public function resetConditions(Nutgram $bot)
-    {
-        $players = $this->getSession($this->sessionId)?->players();
-        if ($players) {
-            foreach ($players as $player) {
-                $this->updateCondition(
-                    $player->session_id,
-                    $player->player_id,
-                    PlayerCondition::Ready->value,
-                );
-            }
-        }
-        $this->start($bot, $this->sessionId);
     }
     
     public function handleDraft(Nutgram $bot)

@@ -5,15 +5,14 @@ namespace App\TelegramBot\Conversations;
 use SergiX44\Nutgram\Conversations\Conversation;
 use App\TelegramBot\Traits\SessionsTrait;
 use App\TelegramBot\Traits\GamesTrait;
+use App\TelegramBot\Traits\PlayersTrait;
+use App\Modules\Game\Models\PlayerCondition;
 use SergiX44\Nutgram\Nutgram;
 use SergiX44\Nutgram\Telegram\Types\Keyboard;
 
 class GameDraftConversation extends Conversation
 {
-use SessionsTrait, GamesTrait, PlayersTrait;
-    
-    private const CONFIRM = '1';
-    private const DECLINE = '0';
+    use SessionsTrait, GamesTrait, PlayersTrait;
     
     public int $sessionId;
     public ?int $catchers = null;
@@ -75,37 +74,11 @@ use SessionsTrait, GamesTrait, PlayersTrait;
         $this->catchers = $catchers;
         $this->runners = $runners;
         
-//        $this->confirm($bot);
-        $this->next('handleCreateDraft');
+        $this->handleCreateDraft($bot);
     }
     
-//    private function confirm(Nutgram $bot)
-//    {
-//        $bot->sendMessage(
-//            text: sprintf('Граємо *%s vs %s*. Вірно?', $this->catchers, $this->runners),
-//            parse_mode: 'markdown',
-//            reply_markup: Keyboard\InlineKeyboardMarkup::make()
-//                ->addRow(
-//                    Keyboard\InlineKeyboardButton::make('Так', callback_data: self::CONFIRM),
-//                    Keyboard\InlineKeyboardButton::make('Ні', callback_data: self::DECLINE),
-//                )
-//        );
-//        
-//        $this->next('handleCreateDraft');
-//    }
-    
-    public function handleCreateDraft(Nutgram $bot)
+    private function handleCreateDraft(Nutgram $bot)
     {
-        if (!$bot->isCallbackQuery()) {
-            $this->askFormat($bot);
-            return;
-        }
-        
-        if ((self::DECLINE === $bot->callbackQuery()->data) || empty($this->catchers) || empty($this->runners)) {
-            $this->askFormat($bot);
-            return;
-        }
-        
         $this->end();
         
         $this->draftGame($this->sessionId, $this->catchers, $this->runners);
@@ -115,7 +88,7 @@ use SessionsTrait, GamesTrait, PlayersTrait;
     
     private function resetConditions()
     {
-        $players = $this->getSession($this->sessionId)?->players();
+        $players = $this->getSession($this->sessionId)?->players;
         if (!$players) {
             return;
         }
