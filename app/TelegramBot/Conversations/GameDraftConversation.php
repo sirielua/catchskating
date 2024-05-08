@@ -97,7 +97,7 @@ use SessionsTrait, GamesTrait, PlayersTrait;
     public function handleCreateDraft(Nutgram $bot)
     {
         if (!$bot->isCallbackQuery()) {
-            $this->confirm($bot);
+            $this->askFormat($bot);
             return;
         }
         

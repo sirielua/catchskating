@@ -153,7 +153,7 @@ class GameCompleteConversation extends Conversation
     public function handleCompleteGame(Nutgram $bot)
     {
         if (!$bot->isCallbackQuery()) {
-            $this->confirm($bot);
+            $this->askWhoWon($bot);
             return;
         }
         
