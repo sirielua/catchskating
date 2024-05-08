@@ -3,6 +3,7 @@
 namespace App\TelegramBot\Handlers;
 
 use SergiX44\Nutgram\Nutgram;
+use Illuminate\Support\Facades\App;
 
 class FallbackHandler
 {
